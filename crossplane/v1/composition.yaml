@@ -1,0 +1,83 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: apiapp
+spec:
+  compositeTypeRef:
+    apiVersion: crossplanev2.cncf.io/v1alpha1
+    kind: MeetupApp
+  resources:
+    - name: app-deployment
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha1
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: default
+          forProvider:
+            manifest:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: ""
+                namespace: ""
+              spec:
+                selector:
+                  matchLabels:
+                    app: myapp
+                template:
+                  metadata:
+                    labels:
+                      app: myapp
+                  spec:
+                    imagePullSecrets:
+                      - name: gitlab
+                    containers:
+                      - name: main
+                        image: nginx
+                        envFrom:
+                          - configMapRef:
+                              name: private-api
+                          - secretRef:
+                              name: public-api
+                          - secretRef:
+                              name: public-api-postgres
+                        ports:
+                          - containerPort: 8080
+      patches:
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.selector.matchLabels.app
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels.app
+        - fromFieldPath: spec.image
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].image
+        - fromFieldPath: spec.replicas
+          toFieldPath: spec.forProvider.manifest.spec.replicas
+        - fromFieldPath: spec.port
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].ports[0].containerPort
+    - name: app-deployment
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha1
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: default
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Service
+              spec:
+                selector:
+                  app: myapp
+                ports:
+                  - port: 8080
+                    targetPort: 80
+      patches:
+        - fromFieldPath: spec.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.selector.app
+        - fromFieldPath: spec.servicePort
+          toFieldPath: spec.forProvider.manifest.spec.ports[0].port
+        - fromFieldPath: spec.port
+          toFieldPath: spec.forProvider.manifest.spec.ports[0].targetPort

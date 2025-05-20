@@ -1,0 +1,60 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xmeetupapps.crossplanev2.cncf.io
+spec:
+  group: crossplanev2.cncf.io
+  names:
+    kind: XMeetupApp
+    plural: xmeetupapps
+  claimNames:
+    kind: MeetupApp
+    plural: meetupapps
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                name:
+                  type: string
+                image:
+                  type: string
+                replicas:
+                  type: integer
+                  default: 1
+                port:
+                  type: integer
+                  default: 8080
+                servicePort:
+                  type: integer
+                  default: 80
+                valkey:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: false
+                postgres:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: false
+                configMap:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    data:
+                      type: object
+                      additionalProperties:
+                        type: string
+              required:
+                - name
+                - image

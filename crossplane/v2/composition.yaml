@@ -1,0 +1,206 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: meetupapp
+  namespace: meetup-devops-aix-marseille
+spec:
+  compositeTypeRef:
+    apiVersion: crossplanev2.cncf.io/v1alpha1
+    kind: MeetupApp
+  pipeline:
+    - step: create-resources
+      functionRef:
+        name: crossplane-contrib-function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+        - name: deployment
+          base:
+            apiVersion: apps/v1
+            kind: Deployment
+            spec:
+              selector:
+                matchLabels:
+                  app: myapp
+              template:
+                metadata:
+                  labels:
+                    app: myapp
+                spec:
+                  containers:
+                    - name: main
+                      image: nginx
+                      envFrom:
+                        - configMapRef:
+                            name: placeholder
+                        - secretRef:
+                            name: placeholder
+                        - secretRef:
+                            name: placeholder
+                      ports:
+                        - containerPort: 8080
+          readinessChecks:
+            - type: MatchCondition
+              matchCondition:
+                type: Available
+                status: 'True'
+          patches:
+            - fromFieldPath: metadata.name
+              toFieldPath: spec.selector.matchLabels.app
+            - fromFieldPath: metadata.name
+              toFieldPath: spec.template.metadata.labels.app
+            - fromFieldPath: spec.image
+              toFieldPath: spec.template.spec.containers[0].image
+            - fromFieldPath: spec.replicas
+              toFieldPath: spec.replicas
+            - fromFieldPath: spec.port
+              toFieldPath: spec.template.spec.containers[0].ports[0].containerPort
+            - fromFieldPath: spec.name
+              toFieldPath: spec.template.spec.containers[0].envFrom[0].configMapRef.name
+              policy:
+                fromFieldPath: Optional
+            - fromFieldPath: spec.name
+              toFieldPath: spec.template.spec.containers[0].envFrom[1].secretRef.name
+              policy:
+                fromFieldPath: Optional
+              transforms:
+              - type: string
+                string:
+                  type: Format
+                  fmt: "%s-valkey"
+            - fromFieldPath: spec.name
+              toFieldPath: spec.template.spec.containers[0].envFrom[2].secretRef.name
+              policy:
+                fromFieldPath: Optional
+              transforms:
+              - type: string
+                string:
+                  type: Format
+                  fmt: "%s-postgres-app"
+        - name: service
+          base:
+            apiVersion: v1
+            kind: Service
+            spec:
+              selector:
+                app: myapp
+              ports:
+                - port: 8080
+                  targetPort: 80
+          readinessChecks:
+            - type: NonEmpty
+              fieldPath: spec.clusterIP
+          patches:
+            - fromFieldPath: spec.name
+              toFieldPath: metadata.name
+            - fromFieldPath: metadata.name
+              toFieldPath: spec.selector.app
+            - fromFieldPath: spec.servicePort
+              toFieldPath: spec.ports[0].port
+            - fromFieldPath: spec.port
+              toFieldPath: spec.ports[0].targetPort
+        - name: configmap
+          base:
+            apiVersion: v1
+            kind: ConfigMap
+            data:
+              key: value
+          readinessChecks:
+            - type: NonEmpty
+              fieldPath: data
+          patches:
+            - fromFieldPath: spec.name
+              toFieldPath: metadata.name
+            - fromFieldPath: spec.configMap.data
+              toFieldPath: data
+        - name: valkey
+          base:
+            apiVersion: hyperspike.io/v1
+            kind: Valkey
+            spec:
+              nodes: 1
+              replicas: 0
+              resources:
+                limits:
+                  memory: 128Mi
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+              tls: true
+              certIssuer: valkey-selfsigned-issuer
+              certIssuerType: Issuer
+              volumePermissions: true
+              exporterImage: valkey/valkey:8.1.0
+              image: valkey/valkey:8.1.0
+              prometheus: false
+              prometheusLabels:
+                prometheus: prometheus
+              storage:
+                spec:
+                  accessModes:
+                    - ReadWriteOnce
+                  resources:
+                    requests:
+                      storage: 1Gi
+          readinessChecks:
+          - type: MatchTrue
+            fieldPath: status.ready
+          patches:
+            - fromFieldPath: spec.name
+              toFieldPath: metadata.name
+              transforms:
+              - type: string
+                string:
+                  type: Format
+                  fmt: "%s-valkey"
+        - name: postgres
+          base:
+            apiVersion: postgresql.cnpg.io/v1
+            kind: Cluster
+            spec:
+              instances: 1
+              storage:
+                size: 1Gi
+              bootstrap:
+                initdb:
+                  database: placeholder
+                  encoding: UTF8
+                  owner: placeholder
+              resources:
+                requests:
+                  memory: "512Mi"
+                  cpu: "500m"
+                limits:
+                  memory: "1Gi"
+                  cpu: "1"
+          patches:
+            - fromFieldPath: spec.name
+              toFieldPath: metadata.name
+              transforms:
+                - type: string
+                  string:
+                    type: Format
+                    fmt: "%s-postgres"
+            - fromFieldPath: spec.name
+              toFieldPath: spec.bootstrap.initdb.database
+            - fromFieldPath: spec.name
+              toFieldPath: spec.bootstrap.initdb.owner
+              transforms:
+                - type: string
+                  string:
+                    type: Format
+                    fmt: "%s-user"
+        - name: issuer
+          base:
+            apiVersion: cert-manager.io/v1
+            kind: Issuer
+            metadata:
+              name: valkey-selfsigned-issuer
+            spec:
+              selfSigned: {}
+          readinessChecks:
+            - type: MatchCondition
+              matchCondition:
+                type: Ready
+                status: "True"

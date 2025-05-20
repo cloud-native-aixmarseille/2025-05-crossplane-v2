@@ -1,0 +1,16 @@
+apiVersion: crossplanev2.cncf.io/v1alpha1
+kind: MeetupApp
+metadata:
+  name: meetup-app
+  namespace: meetup-devops-aix-marseille
+spec:
+  name: meetup-app
+  image: nginx:latest
+  replicas: 2
+  valkey:
+    enabled: true
+  postgres:
+    enabled: true
+  configMap:
+    data:
+      ENV: dev
